@@ -22,6 +22,18 @@
 8. **错误**：连接失败只说主机/端口/数据库和原因，不回显密码或完整连接串。
 9. **按 Bot 关闭**：沿用现有 `offFor`，关掉后该 Bot 看不到工具。
 
+## 合规落点（评审给的四条，采纳）
+
+1. **只读账号是唯一安全边界**。界面和文档都写死「必须用只读账号」；插件侧的 SQL 关键字过滤只做提示，不当防护。
+2. **密码只走密钥引用，不放 `args`**：stdio MCP 的 `env` 支持 `secret:NAME`（`src/host/capabilities.js` 的 `resolveValues`），DSN 放 `env` 的密钥引用；`args` 会被 `ps` 看到，一律不用。
+3. **所有出口都 scrub**：错误、日志、诊断包、feed、IM 转发统一走 `rt.redactSecrets`（`capabilities.js` 现有写法），host/user/password 片段在拼接 cause 前后都清。
+4. **连接串只在 host 内存里拼**：不写工作目录、不进 Bot 卡片、不进团队导出；默认 `sslmode=require`，不提供「跳过证书校验」开关。
+5. **资源边界有默认值**：连接 5s、查询 30s、最大返回 1000 行、连接池 4；超限报错而不是截断后继续。
+6. **默认网络范围**：只允许 loopback 和私网；公网地址需要显式确认一次，且必须 TLS（非 TLS 一律拒）。
+7. **结果外发要说清**：卡片上写明「查询结果会进入对话并发送给模型」，默认先拉元数据（表/列），查询默认限制行数。
+8. **目录注释与测试**：`catalog.js` 头注释补一句「本目录只收 remote MCP（oauth/key）；本地数据库是 stdio MCP，走新的卡片入口」；fixtures 用假 DSN（`postgres://u:fake@127.0.0.1/db`），断言日志、错误和 `state.json` 里没有密码；合并前 `node scripts/scan.mjs` 的 must-fix 必须为 0。
+9. **不内置驱动**：v1 不把 `pg`/`mysql2` 塞进依赖（也就暂时不涉及 NOTICE）；用户选 MCP 服务器。
+
 ## 不做什么
 
 - 不做 ORM、不缓存数据、不代理写语句。
